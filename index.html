@@ -180,6 +180,22 @@ button{font:inherit; color:inherit}
 footer{margin-top:48px; color:var(--muted); font-size:13px; max-width:760px}
 .brand span{white-space:nowrap}
 @media (max-width:560px){ .crumbs:not(:empty) ~ .sp{display:none} .top:has(.crumbs:not(:empty)) .brand span{display:none} }
+.syncbtn{display:inline-flex; align-items:center; gap:7px; border:1px solid var(--line); background:var(--surface); border-radius:99px; padding:6px 12px; font-size:13px; font-weight:700; cursor:pointer; white-space:nowrap; color:var(--ink)}
+.syncbtn:hover{border-color:var(--ink)}
+.syncbtn i{width:8px; height:8px; border-radius:50%; background:var(--muted); flex:none}
+.syncbtn[data-s="ok"] i{background:var(--ok)} .syncbtn[data-s="busy"] i{background:var(--brass)} .syncbtn[data-s="err"] i{background:var(--ko)}
+.sheet{position:fixed; inset:0; z-index:20; background:color-mix(in srgb, var(--ink) 35%, transparent); display:grid; place-items:center; padding:max(16px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) max(16px, env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px))}
+.sheet .box{background:var(--surface); border:1px solid var(--line); border-radius:var(--r); padding:22px; width:min(520px,100%); max-height:100%; overflow:auto; display:grid; gap:12px}
+.sheet h2{margin:0; font-family:var(--f-display); font-size:22px}
+.sheet p,.sheet ol{margin:0; font-size:15px; color:var(--muted)}
+.sheet ol{padding-left:20px} .sheet ol li{margin-bottom:4px}
+.sheet input{font:inherit; font-family:var(--f-mono); font-size:14px; padding:10px 12px; border:1.5px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); width:100%}
+.sheet .row{display:flex; flex-wrap:wrap; gap:8px}
+.sheet .msg{font-size:14px; padding:10px 12px; border-radius:8px; background:var(--surface2)}
+.sheet .msg.ko{background:var(--ko-soft); color:var(--ko)} .sheet .msg.ok{background:var(--ok-soft); color:var(--ok)}
+@media (max-width:560px){ .brand{font-size:17px} .syncbtn{padding:6px 10px} #synclab{display:none} .syncbtn::after{content:"Synchro"} }
+.resume{display:flex; flex-wrap:wrap; align-items:center; gap:10px 16px; background:var(--surface); border:1px solid var(--line); border-left:5px solid var(--accent); border-radius:var(--r); padding:14px 16px; margin-bottom:22px}
+.resume span{color:var(--muted); font-size:14px} .resume b{color:var(--ink)}
 @media (prefers-reduced-motion: reduce){ *{transition:none!important; animation:none!important} }
 </style>
 
@@ -193,9 +209,10 @@ footer{margin-top:48px; color:var(--muted); font-size:13px; max-width:760px}
     </a>
     <nav class="crumbs" id="crumbs"></nav>
     <span class="sp"></span>
+    <button class="syncbtn" id="syncbtn" type="button" data-s="off" aria-label="Synchronisation de la progression"><i></i><span id="synclab">Synchroniser</span></button>
   </header>
   <main id="app"></main>
-  <footer class="read">Contenus pédagogiques à jour au 27 octobre 2026 (loi de finances 2026, LFSS 2026, réforme DPE). Ils ne remplacent pas un conseil juridique ou fiscal personnalisé ; les seuils changent chaque année, vérifiez-les avant un rendez-vous client. Votre progression est enregistrée dans ce navigateur.</footer>
+  <footer class="read">Contenus pédagogiques à jour au 27 octobre 2026 (loi de finances 2026, LFSS 2026, réforme DPE). Ils ne remplacent pas un conseil juridique ou fiscal personnalisé ; les seuils changent chaque année, vérifiez-les avant un rendez-vous client. Votre progression est enregistrée sur cet appareil et, si la synchronisation est activée, dans un gist privé de votre compte GitHub.</footer>
 </div>
 
 <script src="f1.js"></script>
@@ -217,14 +234,15 @@ const app = document.getElementById('app'), crumbs = document.getElementById('cr
 const LV = {1:'Fondamental',2:'Intermédiaire',3:'Expert'};
 let P = {};
 try{ P = JSON.parse(localStorage.getItem('barbiche-progress')||'{}') || {}; }catch(e){ P = {}; }
-function save(){ try{ localStorage.setItem('barbiche-progress', JSON.stringify(P)); }catch(e){} }
+function save(){ try{ localStorage.setItem('barbiche-progress', JSON.stringify(P)); }catch(e){} if(window.__bSync) window.__bSync.push(); }
+const isRead = k => P[k]===true || !!(P[k] && P[k].v);
 const esc = s => String(s).replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const shuffle = a => { for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]];} return a; };
 const getF = id => FS.find(f=>f.id===id);
 const qsOf = m => m.gen ? m.gen() : (m.qcm||[]);
 const qCount = m => m.gen ? (m.genCount||0) : (m.qcm||[]).length;
 function modDone(f,m){
-  const read = !m.lesson || f.qcmFirst || P['r:'+f.id+':'+m.id];
+  const read = !m.lesson || f.qcmFirst || isRead('r:'+f.id+':'+m.id);
   const b = P['b:'+f.id+':'+m.id];
   const quizOk = !qCount(m) || (b && b.p>=60);
   return read && quizOk;
@@ -243,6 +261,7 @@ function home(){
     <p>Cours, cas pratiques et QCM en trois niveaux. Choisissez une formation, suivez les modules dans l'ordre et validez chacun avec au moins 60 % au QCM.</p>
     <div class="stats"><span><b>${FS.length}</b> formations</span><span><b>${nm}</b> modules</span><span><b>${nq}+</b> questions</span></div>
   </section>
+  ${P.last && P.last.h ? `<div class="resume"><span>Dernière activité${P.last.dev?' ('+esc(P.last.dev)+')':''} : <b>${esc(P.last.label||'')}</b></span><a class="btn pri" href="#${esc(P.last.h)}">Reprendre</a></div>` : ''}
   <div class="grid">${FS.map(f=>{ const p=fProg(f); return `
     <a class="card" href="#f-${f.id}" ${fvar(f)}>
       <span class="num">Formation ${f.num} · ${esc(f.kicker)}</span>
@@ -268,7 +287,7 @@ function formation(fid){
     <a class="btn" href="#x-${f.id}">Examen final${ex? ' · meilleur '+ex+' %':''}</a>
     <span class="pill" style="align-self:center">${p.d}/${p.n} modules validés</span>
   </div>
-  <ol class="mods">${f.modules.map((m,i)=>{ const b=P['b:'+f.id+':'+m.id]; const r=P['r:'+f.id+':'+m.id]; const d=modDone(f,m); return `
+  <ol class="mods">${f.modules.map((m,i)=>{ const b=P['b:'+f.id+':'+m.id]; const r=isRead('r:'+f.id+':'+m.id); const d=modDone(f,m); return `
     <li><a class="mod" href="#m-${f.id}-${m.id}">
       <span class="n ${d?'done':''}">${d?'✓':String(i+1).padStart(2,'0')}</span>
       <span style="min-width:0"><h3>${esc(m.title)}</h3><span class="sub">${m.time?'<span>'+esc(m.time)+'</span>':''}${m.lesson?'<span>Cours'+(r?' <span class="chk">lu</span>':'')+'</span>':''}${m.ex&&m.ex.length?'<span>'+m.ex.length+' exercice'+(m.ex.length>1?'s':'')+'</span>':''}${qCount(m)?'<span>'+qCount(m)+' questions</span>':''}</span></span>
@@ -293,12 +312,12 @@ function moduleView(fid, mid, tab){
   function show(t){
     app.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected', b.dataset.t===t));
     if(t==='cours'){
-      const r=P['r:'+f.id+':'+m.id];
+      const r=isRead('r:'+f.id+':'+m.id);
       pane.innerHTML = `<article class="lesson">${m.lesson}</article>
       ${m.keys&&m.keys.length?`<aside class="keys"><h4>À retenir</h4><ul>${m.keys.map(k=>'<li>'+k+'</li>').join('')}</ul></aside>`:''}
       <div class="readbar"><button class="btn ${r?'':'pri'}" id="rd">${r?'✓ Cours lu':'Marquer comme lu'}</button>
       ${m.ex&&m.ex.length?'<button class="btn" data-go="exo">Passer aux exercices</button>':''}${qCount(m)?'<button class="btn" data-go="qcm">Passer au QCM</button>':''}</div>`;
-      pane.querySelector('#rd').onclick=()=>{ P['r:'+f.id+':'+m.id]=!r; save(); show('cours'); };
+      pane.querySelector('#rd').onclick=()=>{ P['r:'+f.id+':'+m.id]={v:!r,t:Date.now()}; save(); show('cours'); };
     } else if(t==='exo'){
       pane.innerHTML = m.ex.map((e,i)=>`<section class="exo"><h3>${esc(e.t||('Exercice '+(i+1)))}</h3><div class="lesson">${e.q}</div>
         <button class="btn" data-sol="${i}">Afficher la correction</button><div class="sol lesson" id="sol${i}" hidden>${e.a}</div></section>`).join('')
@@ -382,15 +401,129 @@ function exam(fid){
   start(); window.scrollTo({top:0});
 }
 
+function remember(h,label){ P.last={h,label,t:Date.now(),dev:DEV}; save(); }
+const DEV = /iPhone|iPad|Android/i.test(navigator.userAgent) ? 'mobile' : 'ordinateur';
 function route(){
   const h=decodeURIComponent(location.hash.slice(1)); let r;
+  if((r=h.match(/^m-([a-z0-9]+)-([a-z0-9]+)$/))){ const f=getF(r[1]); const m=f&&f.modules.find(x=>x.id===r[2]); if(m) remember(h, (f.short||f.title)+' › '+m.title); }
+  if((r=h.match(/^x-([a-z0-9]+)$/))){ const f=getF(r[1]); if(f) remember(h, (f.short||f.title)+' › Examen final'); }
   if((r=h.match(/^f-([a-z0-9]+)$/))) return formation(r[1]);
   if((r=h.match(/^m-([a-z0-9]+)-([a-z0-9]+)$/))) return moduleView(r[1],r[2],'cours');
   if((r=h.match(/^x-([a-z0-9]+)$/))) return exam(r[1]);
   home();
 }
+window.__bGetP=()=>JSON.parse(JSON.stringify(P));
+window.__bSetP=v=>{ P=v; try{ localStorage.setItem('barbiche-progress', JSON.stringify(P)); }catch(e){} };
+window.__bRefresh=()=>{ const h=location.hash.slice(1); if(!h || /^f-/.test(h)) route(); };
 window.addEventListener('hashchange', route);
 route();
+
+/* ---------- synchronisation (gist GitHub privé) ---------- */
+(function(){
+  const K_TOKEN='barbiche-gh-token', K_GIST='barbiche-gist-id', DESC='Formation Barbiche — progression (ne pas supprimer)', FILE='barbiche-progress.json';
+  const btn=document.getElementById('syncbtn'), lab=document.getElementById('synclab');
+  const get=k=>{ try{return localStorage.getItem(k);}catch(e){return null;} };
+  const set=(k,v)=>{ try{ v==null?localStorage.removeItem(k):localStorage.setItem(k,v);}catch(e){} };
+  let token=get(K_TOKEN), gist=get(K_GIST), timer=null, busy=false, lastSync=0, dirty=false;
+  function state(s,t){ btn.dataset.s=s; lab.textContent=t; }
+  async function gh(path,opt={}){
+    const r=await fetch('https://api.github.com'+path,{...opt,cache:'no-store',headers:{'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','X-GitHub-Api-Version':'2022-11-28',...(opt.body?{'Content-Type':'application/json'}:{})}});
+    if(r.status===401) throw new Error('Clé refusée par GitHub (vérifiez qu\'elle est copiée en entier et non expirée).');
+    if(r.status===403||r.status===404) throw new Error('Accès refusé : la clé doit avoir la case « gist » cochée.');
+    if(!r.ok) throw new Error('GitHub a répondu '+r.status+'.');
+    return r.json();
+  }
+  async function findGist(){
+    for(let page=1; page<=10; page++){
+      const list=await gh('/gists?per_page=100&page='+page);
+      const g=list.find(x=>x.description===DESC || (x.files && x.files[FILE]));
+      if(g) return g.id;
+      if(list.length<100) break;
+    }
+    const g=await gh('/gists',{method:'POST',body:JSON.stringify({description:DESC,public:false,files:{[FILE]:{content:JSON.stringify({v:1,data:{}})}}})});
+    return g.id;
+  }
+  function norm(v){ return v===true?{v:true,t:0}:(v&&typeof v==='object'?v:{v:false,t:0}); }
+  function merge(a,b){
+    const o={...a};
+    for(const k in b){
+      const x=a[k], y=b[k];
+      if(x===undefined){ o[k]=y; continue; }
+      if(k==='last'){ o[k]=(y&&y.t||0)>(x&&x.t||0)?y:x; }
+      else if(k.startsWith('r:')){ const nx=norm(x), ny=norm(y); o[k]=ny.t>nx.t?ny:(ny.t===nx.t?{v:nx.v||ny.v,t:nx.t}:nx); }
+      else if(k.startsWith('b:')){ o[k]=((y&&y.p)||0)>((x&&x.p)||0)?y:x; }
+      else if(k.startsWith('x:')){ o[k]=Math.max(+x||0,+y||0); }
+      else o[k]=x;
+    }
+    return o;
+  }
+  const same=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
+  async function sync(){
+    if(!token||busy) return;
+    busy=true; state('busy','Synchro…');
+    try{
+      if(!gist){ gist=await findGist(); set(K_GIST,gist); }
+      let g;
+      try{ g=await gh('/gists/'+gist); }catch(e){ gist=await findGist(); set(K_GIST,gist); g=await gh('/gists/'+gist); }
+      const f=g.files&&g.files[FILE];
+      let remote={};
+      if(f){ let txt=f.content; if(f.truncated){ txt=await (await fetch(f.raw_url,{cache:'no-store'})).text(); } try{ remote=(JSON.parse(txt)||{}).data||{}; }catch(e){} }
+      const local=window.__bGetP(), merged=merge(local,remote);
+      const localChanged=!same(merged,local), remoteChanged=!same(merged,remote);
+      if(localChanged) window.__bSetP(merged);
+      if(remoteChanged) await gh('/gists/'+gist,{method:'PATCH',body:JSON.stringify({files:{[FILE]:{content:JSON.stringify({v:1,updated:Date.now(),data:merged})}}})});
+      dirty=false; lastSync=Date.now();
+      state('ok','Synchronisé');
+      if(localChanged) window.__bRefresh();
+    }catch(e){ state('err','Synchro en erreur'); btn.title=e.message; window.__bLastErr=e.message; }
+    finally{ busy=false; if(dirty) schedule(1500); }
+  }
+  function schedule(ms){ clearTimeout(timer); timer=setTimeout(sync, ms); }
+  window.__bSync={ push(){ if(!token) return; dirty=true; schedule(1500); }, now:sync };
+  document.addEventListener('visibilitychange',()=>{ if(document.visibilityState==='visible') sync(); else if(dirty) sync(); });
+  window.addEventListener('focus',()=>{ if(Date.now()-lastSync>15000) sync(); });
+  window.addEventListener('pageshow',()=>sync());
+  setInterval(()=>{ if(document.visibilityState==='visible') sync(); }, 60000);
+
+  function panel(){
+    const sh=document.createElement('div'); sh.className='sheet'; sh.setAttribute('role','dialog'); sh.setAttribute('aria-modal','true');
+    const on=!!token;
+    sh.innerHTML=`<div class="box">
+      <h2>Synchroniser ma progression</h2>
+      ${on?`<p>La synchronisation est <b>active</b> sur cet appareil. Votre progression est enregistrée dans un gist privé de votre compte GitHub et mise à jour automatiquement à chaque changement, ainsi qu'à chaque ouverture de l'application.</p>
+      ${window.__bLastErr && btn.dataset.s==='err' ? `<div class="msg ko">${esc(window.__bLastErr)}</div>`:''}
+      <div class="row"><button class="btn pri" id="sy-now" type="button">Synchroniser maintenant</button><button class="btn" id="sy-off" type="button">Désactiver sur cet appareil</button><button class="btn" id="sy-close" type="button">Fermer</button></div>`
+      :`<p>Collez votre clé GitHub (elle commence par <code class="mono">ghp_</code>). Faites-le une fois sur l'ordinateur et une fois dans l'application de l'iPhone : les deux partageront ensuite la même progression.</p>
+      <ol><li>Sur GitHub, ouvrez <b>github.com/settings/tokens/new</b>.</li><li>Note : <i>Barbiche</i> ; expiration : <i>No expiration</i> ; cochez uniquement la case <b>gist</b>.</li><li>Cliquez sur <b>Generate token</b> et copiez la clé.</li></ol>
+      <label for="sy-token" class="mono" style="font-size:12px;color:var(--muted)">CLÉ GITHUB</label>
+      <input id="sy-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="ghp_…">
+      <div id="sy-msg" hidden></div>
+      <div class="row"><button class="btn pri" id="sy-on" type="button">Activer la synchronisation</button><button class="btn" id="sy-close" type="button">Annuler</button></div>`}
+    </div>`;
+    document.body.appendChild(sh);
+    const close=()=>sh.remove();
+    sh.addEventListener('click',e=>{ if(e.target===sh) close(); });
+    sh.querySelector('#sy-close').onclick=close;
+    const q=s=>sh.querySelector(s);
+    if(on){
+      q('#sy-now').onclick=async()=>{ await sync(); close(); };
+      q('#sy-off').onclick=()=>{ token=null; gist=null; set(K_TOKEN,null); set(K_GIST,null); state('off','Synchroniser'); close(); };
+    } else {
+      const inp=q('#sy-token'), msg=q('#sy-msg'); inp.focus();
+      q('#sy-on').onclick=async()=>{
+        const v=inp.value.trim(); if(!v){ inp.focus(); return; }
+        token=v; msg.hidden=false; msg.className='msg'; msg.textContent='Connexion à GitHub…';
+        try{ gist=await findGist(); set(K_TOKEN,token); set(K_GIST,gist); await sync();
+          if(btn.dataset.s==='err') throw new Error(window.__bLastErr||'Erreur');
+          msg.className='msg ok'; msg.textContent='Synchronisation activée. Votre progression est à jour.'; setTimeout(close,1400);
+        }catch(e){ token=get(K_TOKEN); msg.className='msg ko'; msg.textContent=e.message; state(token?'err':'off', token?'Synchro en erreur':'Synchroniser'); }
+      };
+      inp.addEventListener('keydown',e=>{ if(e.key==='Enter') q('#sy-on').click(); });
+    }
+  }
+  btn.onclick=panel;
+  if(token){ state('busy','Synchro…'); sync(); } else state('off','Synchroniser');
+})();
 })();
 </script>
 
